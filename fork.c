@@ -32,11 +32,11 @@ int main(void)
     int fd = open("/root/tmp/foo", O_CREAT | O_TRUNC | O_WRONLY);
     while (1) {
       lseek(fd, 0, SEEK_SET);
-      write(fd, "---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------\n", 245);
+      write(fd, "--------------------------------------------------------------------\n", 70);
       lseek(fd, 0, SEEK_SET);
-      write(fd, "___________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________\n", 245);
+      write(fd, "____________________________________________________________________\n", 70);
       lseek(fd, 0, SEEK_SET);
-      write(fd, "MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM\n", 245);
+      write(fd, "MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM\n", 70);
     }
   }
   return 0;
