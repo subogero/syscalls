@@ -9,6 +9,7 @@
  * Further info: http://beej.us/guide/bgnet/output/html/singlepage/bgnet.html
  */
 #include <unistd.h>
+#include <fcntl.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/wait.h>
@@ -24,6 +25,17 @@ int main(int argc, char *argv[])
 	if (argc < 2) {
 		write(2, "port invalid\n", 13);
 		return 1;
+	}
+	if (argc >= 3) {
+		int logfd = open(argv[2], O_CREAT | O_WRONLY | O_APPEND, 0644);
+		if (logfd < 0) {
+			write(2, "unable to open logfile\n", 23);
+		}
+		else {
+			close(2);
+			dup(logfd);
+			close(logfd);
+		}
 	}
 
 	/* Prepare and start listening on socket */
