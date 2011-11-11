@@ -1,3 +1,2 @@
-fork
-pipe
-mknod
+*
+!*.c

@@ -1,0 +1,11 @@
+Tutorial project for Unix system calls
+
+Each lesson is represented by a single C-file.
+
+To compile just call make:
+make foo # creates foo from foo.c
+
+To run:
+./foo [args]
+
+See "git log" for the right order of lessons.
