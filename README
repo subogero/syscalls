@@ -1,6 +1,7 @@
 Tutorial project for Unix system calls
 
 Each lesson is represented by a single C-file.
+The sources use C99 features, like declarations anywhere in the code.
 
 To compile just call make:
 make foo # creates foo from foo.c
