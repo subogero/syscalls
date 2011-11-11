@@ -4,9 +4,35 @@ Each lesson is represented by a single C-file.
 The sources use C99 features, like declarations anywhere in the code.
 
 To compile just call make:
-make foo # creates foo from foo.c
-
+make foo  # creates executable foo from foo.c
 To run:
 ./foo [args]
 
-See "git log" for the right order of lessons.
+Lessons
+
+1. fork.c
+Create 2 processes via fork(), talk through a file via open() write() read().
+
+2. pipe.c
+Create a pipe, then fork(), talk using the file-descriptors from pipe().
+
+3. mknod.c
+Create a named pipe (FIFO) with mknod(), same story.
+
+4. stat.c
+Get file info from stat(), print it.
+
+5. link.c
+Create hard and symbolic links with link() and symlink().
+
+6. dup.c
+Compares dup() vs opening a file twice.
+
+7. red12.c
+Use dup() to redirect stdout/stderr of program started via execvp().
+
+8. udspair.c
+2 processes communicate via a Unix Domain Socket created by socketpair().
+
+9. allcaps.c
+A TCP/IP daemon using getaddrinfo(), socket(), bind(), listen() and accept().
