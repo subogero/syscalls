@@ -37,5 +37,8 @@ Use dup() to redirect stdout/stderr of program started via execvp().
 9. allcaps.c
 A TCP/IP daemon using getaddrinfo(), socket(), bind(), listen() and accept().
 
-10. rt.c
+10. chat.c
+A chat client-server using TCP/IP sockets and select().
+
+11. rt.c
 Periodic calls using signal(), setitimer() and gettimeofday().
