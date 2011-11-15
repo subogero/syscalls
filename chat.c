@@ -7,6 +7,7 @@
 #include <netdb.h>
 #include <string.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 int s;
 static int run_server(void);
@@ -41,6 +42,12 @@ int main(int argc, char *argv[])
 	}
 	if (server && bind(s, srv->ai_addr, srv->ai_addrlen) < 0) {
 		write(2, "could not bind to host\n", 23);
+		freeaddrinfo(srv);
+		close(s);
+		return 4;
+	}
+	if (!server && connect(s, srv->ai_addr, srv->ai_addrlen) < 0) {
+		write(2, "could not connect to host\n", 23);
 		freeaddrinfo(srv);
 		close(s);
 		return 4;
@@ -115,5 +122,60 @@ static int run_server(void)
 
 static int run_client(void)
 {
-	return 0;
+	/* Get user name */
+	char username[20] = "<";
+	char *user = getenv("USER");
+	if (user) {
+		strcat(username, user);
+	}
+	else {
+		write(1, "enter user name: ", 17);
+		int len = read(0, username + 1, 17);
+		username[len] = 0;
+	}
+	strcat(username, ">");
+	/* Prepare multiplexed reading from socket and stdin */
+	char line[256];
+	int fd_max = s;
+	fd_set all_fds, read_fds;
+	FD_SET(s, &all_fds);
+	FD_SET(0, &all_fds);
+	while (1) {
+		read_fds = all_fds;
+		if (select(fd_max + 1, &read_fds, NULL, NULL, NULL) < 0) {
+			write(2, "select error\n", 13);
+			return 6;
+		}
+		/* New data from server */
+		if (FD_ISSET(s, &read_fds)) {
+			int length = read(s, line, 256);
+			/* Close connection if necessary */
+			if (length <= 0) {
+				write(2, "connection closed\n", 18);
+				close(s);
+				return 5;
+			}
+			write(2, line, length);
+		}
+		/* New data from user terminal */
+		if (FD_ISSET(0, &read_fds)) {
+			static char line_closed = 1;
+			int ofs_name = 0;
+			if (line_closed) {
+				strcpy(line, username);
+				ofs_name = strlen(username);
+				line_closed = 0;
+			}
+			int length = read(0, line + ofs_name, 256);
+			if (length <= 0) {
+				write(1, "good bye\n", 9);
+				close(s);
+				return 0;
+			}
+			line[length + ofs_name] = 0;
+			if (strchr(line, '\n'))
+				line_closed = 1;
+			write(s, line, length + ofs_name);
+		}
+	}
 }
