@@ -119,12 +119,13 @@ static int run_server(void)
 			/* Copy line to all connections except sender */
 			int j;
 			for (j = 3; j <= fd_max; ++j) {
-				char prefix[6];
 				if (j == s || j == i || !FD_ISSET(j, &all_fds))
 					continue;
-				sprintf(prefix,"\033[%dm",31+(i%7));
+				char prefix[6];
+				sprintf(prefix, "\033[%dm", 31 + i%7);
 				write(j, prefix, 5);
 				write(j, line, length);
+				write(j, "\033[0m", 4);
 			}
 		}
 	}
@@ -169,7 +170,6 @@ static int run_client(void)
 				return 5;
 			}
 			write(2, line, length);
-			write(2, "\033[0m", 4);
 		}
 		/* New data from user terminal */
 		if (FD_ISSET(0, &read_fds)) {
