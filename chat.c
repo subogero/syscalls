@@ -8,17 +8,24 @@
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <termios.h>
 
 int s;
 static int run_server(void);
 static int run_client(void);
+static void char_term(int on);
+static void help(void);
 
 int main(int argc, char *argv[])
 {
 	/* Get server/host and port from command line */
 	char server = 0;
+	if (strncmp(argv[1], "-h", 3) == 0) {
+		help();
+		return 0;
+	}
 	if (argc < 3) {
-		write(2, "Usage: chatcs -s|<host> <port>\n", 34);
+		write(2, "Usage: chatcs -s|<host> <port> | -h\n", 39);
 		return 1;
 	}
 	if (strncmp(argv[1], "-s", 3) == 0) {
@@ -133,17 +140,19 @@ static int run_client(void)
 		int len = read(0, username + 1, 17);
 		username[len] = 0;
 	}
-	strcat(username, ">");
+	strcat(username, ">  ");
 	/* Prepare multiplexed reading from socket and stdin */
 	char line[256];
 	int fd_max = s;
 	fd_set all_fds, read_fds;
 	FD_SET(s, &all_fds);
 	FD_SET(0, &all_fds);
+	char_term(1);
 	while (1) {
 		read_fds = all_fds;
 		if (select(fd_max + 1, &read_fds, NULL, NULL, NULL) < 0) {
 			write(2, "select error\n", 13);
+			char_term(0);
 			return 6;
 		}
 		/* New data from server */
@@ -153,6 +162,7 @@ static int run_client(void)
 			if (length <= 0) {
 				write(2, "connection closed\n", 18);
 				close(s);
+				char_term(0);
 				return 5;
 			}
 			write(2, line, length);
@@ -167,9 +177,10 @@ static int run_client(void)
 				line_closed = 0;
 			}
 			int length = read(0, line + ofs_name, 256);
-			if (length <= 0) {
-				write(1, "good bye\n", 9);
+			if (length <= 0 || line[ofs_name] == 4) {
+				write(1, "\ngood bye\n", 10);
 				close(s);
+				char_term(0);
 				return 0;
 			}
 			line[length + ofs_name] = 0;
@@ -178,4 +189,39 @@ static int run_client(void)
 			write(s, line, length + ofs_name);
 		}
 	}
+}
+
+static void char_term(int on)
+{
+	static struct termios orig;
+	static char state = 0;
+	if (!state && on) {
+		struct termios charbased;
+		tcgetattr(0, &orig);
+		memcpy(&charbased, &orig, sizeof orig);
+		charbased.c_lflag &= ~ICANON;
+		charbased.c_cc[VMIN] = 1;
+		charbased.c_cc[VTIME] = 0;
+		tcsetattr(0, TCSANOW, &charbased);
+		state = 1;
+	}
+	if (state && !on) {
+		tcsetattr(0, TCSANOW, &orig);
+		state = 0;
+	}
+}
+
+static void help(void)
+{
+	write(1, "Usage: chat [-h] -s|<host> <port>\n", 34);
+	write(1, "-h     print this help text\n", 28);
+	write(1, "-s     start server mode\n", 25);
+	write(1, "<host> start client mode, connect to host\n", 42);
+	write(1, "<port> to listen or connect\n", 28);
+	write(1, "\n", 1);
+	write(1, "In client mode your terminal is set to raw mode\n", 48); 
+	write(1, "thus every byte you type is immediately sent.\n", 46);
+	write(1, "There is no line editing, not even Backspace.\n", 46);
+	write(1, "\n", 1);
+	write(1, "Quit client with Ctrl-D.\n", 25);
 }
