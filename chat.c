@@ -108,24 +108,23 @@ static int run_server(void)
 		for (i = 3; i <= fd_max; ++i) {
 			if (i == s || !FD_ISSET(i, &read_fds))
 				continue;
-			int length = read(i, line, 256);
+			sprintf(line, "\033[%dm", 31 + i%6);
+			int length = read(i, line + 5, 256);
+			sprintf(line + 5 + length, "\033[0m");
 			/* Close connection if necessary */
 			if (length <= 0) {
 				users--;
 				write(2, "connection closed\n", 18);
 				close(i);
 				FD_CLR(i, &all_fds);
+				continue;
 			}
 			/* Copy line to all connections except sender */
 			int j;
 			for (j = 3; j <= fd_max; ++j) {
 				if (j == s || j == i || !FD_ISSET(j, &all_fds))
 					continue;
-				char prefix[6];
-				sprintf(prefix, "\033[%dm", 31 + i%7);
-				write(j, prefix, 5);
-				write(j, line, length);
-				write(j, "\033[0m", 4);
+				write(j, line, length + 9);
 			}
 		}
 	}
