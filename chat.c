@@ -66,7 +66,7 @@ int main(int argc, char *argv[])
 		return 4;
 	}
 	if (!server && connect(s, srv->ai_addr, srv->ai_addrlen) < 0) {
-		write(2, "could not connect to host\n", 23);
+		write(2, "could not connect to host\n", 26);
 		freeaddrinfo(srv);
 		close(s);
 		return 4;
@@ -136,14 +136,15 @@ static int run_server(void)
 				FD_CLR(i, &all_fds);
 				char *name = usernames(i, NULL, userop_GET);
 				strcpy(line + 5, name ? name : "");
-				strcat(line, "  --- GOOD BYE ---\n");
+				if (name)
+					strcat(line, "  --- GOOD BYE ---  \n");
 				length = strlen(line);
 				usernames(i, NULL, userop_CLR);
 			}
 			else {
 				t_last_post = time(NULL);
 				line[length] = 0;
-				usernames(i, line, userop_SET);
+				usernames(i, line + 5, userop_SET);
 			}
 			sprintf(line + length, "\033[0m");
 			length += 4;
@@ -164,8 +165,6 @@ static char *usernames(int fd, const char *line, enum userop op)
 	static char *names[64] = { [0] = NULL, }; /* C99, wipes whole array */
 	if (fd >= 64) return NULL;
 	switch (op) {
-	case userop_GET:
-		return names[fd];
 	case userop_SET:
 		if (names[fd]) return NULL;
 		if (line[0] != '<') return NULL;
@@ -176,6 +175,7 @@ static char *usernames(int fd, const char *line, enum userop op)
 		if (!names[fd]) return NULL;
 		memcpy(names[fd], line, size);
 		names[fd][size] = 0;
+	case userop_GET:
 		return names[fd];
 	case userop_CLR:
 		free(names[fd]);
@@ -186,7 +186,6 @@ static char *usernames(int fd, const char *line, enum userop op)
 			if (names[i])
 				strcat(line, names[i]);
 		}
-		return NULL;
 	default:
 		return NULL;
 	}
