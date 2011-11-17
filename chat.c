@@ -5,15 +5,27 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netdb.h>
+#include <time.h>
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <termios.h>
 
 int s;
+
 static int run_server(void);
+enum userop {
+	userop_CLR,
+	userop_SET,
+	userop_GET,
+	userop_CATLIST,
+	userop_NOF
+};
+static char *usernames(int fd, const char *line, enum userop op);
+
 static int run_client(void);
 static void char_term(int on);
+
 static void help(void);
 
 int main(int argc, char *argv[])
@@ -79,6 +91,7 @@ static int run_server(void)
 	/* Main loop */
 	while (1) {
 		static int users = 0;
+		static time_t t_last_post;
 		/* Wait for incoming data on listener or connections */
 		read_fds = all_fds;
 		if (select(fd_max + 1, &read_fds, NULL, NULL, NULL) < 0) {
@@ -99,7 +112,12 @@ static int run_server(void)
 				write(2, "new connection\n", 15);
 				FD_SET(fd, &all_fds);
 				if (fd > fd_max) fd_max = fd;
-				sprintf(line, "%d user(s) chatting.\n", users);
+				sprintf(line, "%d user(s) chatting: ", users);
+				usernames(fd, line, userop_CATLIST);
+				strcat(line, "\n");
+				write(fd, line, strlen(line));
+				sprintf(line, "Time since last post [s]: %d\n",
+				              (int)time(NULL) - t_last_post);
 				write(fd, line, strlen(line));
 			}
 		}
@@ -109,24 +127,68 @@ static int run_server(void)
 			if (i == s || !FD_ISSET(i, &read_fds))
 				continue;
 			sprintf(line, "\033[%dm", 31 + i%6);
-			int length = read(i, line + 5, 256);
-			sprintf(line + 5 + length, "\033[0m");
+			int length = 5 + read(i, line + 5, 256);
 			/* Close connection if necessary */
-			if (length <= 0) {
+			if (length <= 5) {
 				users--;
 				write(2, "connection closed\n", 18);
 				close(i);
 				FD_CLR(i, &all_fds);
-				continue;
+				char *name = usernames(i, NULL, userop_GET);
+				strcpy(line + 5, name ? name : "");
+				strcat(line, "  --- GOOD BYE ---\n");
+				length = strlen(line);
+				usernames(i, NULL, userop_CLR);
 			}
+			else {
+				t_last_post = time(NULL);
+				line[length] = 0;
+				usernames(i, line, userop_SET);
+			}
+			sprintf(line + length, "\033[0m");
+			length += 4;
 			/* Copy line to all connections except sender */
 			int j;
 			for (j = 3; j <= fd_max; ++j) {
 				if (j == s || j == i || !FD_ISSET(j, &all_fds))
 					continue;
-				write(j, line, length + 9);
+				write(j, line, length);
 			}
 		}
+	}
+}
+
+static char *usernames(int fd, const char *line, enum userop op)
+{
+	int i;
+	static char *names[64] = { [0] = NULL, }; /* C99, wipes whole array */
+	if (fd >= 64) return NULL;
+	switch (op) {
+	case userop_GET:
+		return names[fd];
+	case userop_SET:
+		if (names[fd]) return NULL;
+		if (line[0] != '<') return NULL;
+		char *end_name = strchr(line, '>');
+		if (!end_name) return NULL;
+		int size = end_name - line + 1;
+		names[fd] = malloc(size + 1);
+		if (!names[fd]) return NULL;
+		memcpy(names[fd], line, size);
+		names[fd][size] = 0;
+		return names[fd];
+	case userop_CLR:
+		free(names[fd]);
+		names[fd] = NULL;
+		return NULL;
+	case userop_CATLIST:
+		for (i = 0; i < 64; ++i) {
+			if (names[i])
+				strcat(line, names[i]);
+		}
+		return NULL;
+	default:
+		return NULL;
 	}
 }
 
