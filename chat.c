@@ -116,8 +116,8 @@ static int run_server(void)
 				usernames(fd, line, userop_CATLIST);
 				strcat(line, "\n");
 				write(fd, line, strlen(line));
-				sprintf(line, "Time since last post [s]: %d\n",
-				              (int)time(NULL) - t_last_post);
+				sprintf(line, "Time since last post [s]: %ld\n",
+				              time(NULL) - t_last_post);
 				write(fd, line, strlen(line));
 			}
 		}
