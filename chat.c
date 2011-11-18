@@ -17,17 +17,21 @@ static int run_server(void);
 enum userop {
 	userop_CLR,
 	userop_SET,
-	userop_GET,
+	userop_CAT,
 	userop_CATLIST,
 	userop_NOF
 };
-static char *usernames(int fd, const char *line, enum userop op);
+static int usernames(int fd, const char *line, enum userop op);
 
 static int run_client(void);
 static void char_term(int on);
 
 static void help(void);
 
+/* Parse command line for server-mode or hostname and port.
+ * Create bound (server) or connected (client) socket "s".
+ * Then call client or server.
+ */
 int main(int argc, char *argv[])
 {
 	/* Get server/host and port from command line */
@@ -77,6 +81,13 @@ int main(int argc, char *argv[])
 	              : run_client();
 }
 
+/* Server: listen on socket "s" for new connections.
+ * Welcome new user with number and list of users and time since last post.
+ * Maintain existing connections in fd_set "all_fds".
+ * Wait for incoming text on all connections with select().
+ * Copy incoming data with user-specific colouring to all other connections.
+ * Print goodbye message to others if a connection is closed.
+ */
 static int run_server(void)
 {
 	/* Start listening for new conections */
@@ -134,9 +145,7 @@ static int run_server(void)
 				write(2, "connection closed\n", 18);
 				close(i);
 				FD_CLR(i, &all_fds);
-				char *name = usernames(i, NULL, userop_GET);
-				strcpy(line + 5, name ? name : "");
-				if (name)
+				if (usernames(i, line, userop_CAT))
 					strcat(line, "  --- GOOD BYE ---  \n");
 				length = strlen(line);
 				usernames(i, NULL, userop_CLR);
@@ -159,38 +168,50 @@ static int run_server(void)
 	}
 }
 
-static char *usernames(int fd, const char *line, enum userop op)
+/* Serverside username database, indexed by socket file-descriptors.
+ * Possible operations: set, clear, get, cat list to string.
+ */
+static int usernames(int fd, const char *line, enum userop op)
 {
 	int i;
 	static char *names[64] = { [0] = NULL, }; /* C99, wipes whole array */
-	if (fd >= 64) return NULL;
+	if (fd < 0 || fd >= 64) return 0;
 	switch (op) {
-	case userop_SET:
-		if (names[fd]) return NULL;
-		if (line[0] != '<') return NULL;
-		char *end_name = strchr(line, '>');
-		if (!end_name) return NULL;
-		int size = end_name - line + 1;
-		names[fd] = malloc(size + 1);
-		if (!names[fd]) return NULL;
-		memcpy(names[fd], line, size);
-		names[fd][size] = 0;
-	case userop_GET:
-		return names[fd];
 	case userop_CLR:
 		free(names[fd]);
 		names[fd] = NULL;
-		return NULL;
+		return fd;
+	case userop_SET:
+		if (names[fd] || line[0] != '<') return 0;
+		char *end_name = strchr(line, '>');
+		if (!end_name) return 0;
+		int size = end_name - line + 1;
+		names[fd] = malloc(size + 1);
+		if (!names[fd]) return 0;
+		memcpy(names[fd], line, size);
+		names[fd][size] = 0;
+		return fd;
+	case userop_CAT:
+		if (!names[fd]) return 0;
+		strcat(line, names[fd]);
+		return fd;
 	case userop_CATLIST:
 		for (i = 0; i < 64; ++i) {
 			if (names[i])
 				strcat(line, names[i]);
 		}
+		return 0;
 	default:
-		return NULL;
+		return 0;
 	}
 }
 
+/* Client: get username from environment or interactively.
+ * Disable terminal line-buffering for immediate sending of typed characters.
+ * Wait for incoming text on both stdin and socket with select().
+ * Print socket data to terminal (stdout).
+ * Copy data from stdin to socket, prefixing each line with user-name.
+ */
 static int run_client(void)
 {
 	/* Get user name */
@@ -255,6 +276,10 @@ static int run_client(void)
 	}
 }
 
+/* Terminal management:
+ * 1 - activate raw character-mode,
+ * 0 - restore original settings
+ */
 static void char_term(int on)
 {
 	static struct termios orig;
@@ -275,6 +300,7 @@ static void char_term(int on)
 	}
 }
 
+/* Print help text */
 static void help(void)
 {
 	write(1, "Usage: chat [-h] -s|<host> <port>\n", 34);
@@ -283,7 +309,7 @@ static void help(void)
 	write(1, "<host> start client mode, connect to host\n", 42);
 	write(1, "<port> to listen or connect\n", 28);
 	write(1, "\n", 1);
-	write(1, "In client mode your terminal is set to raw mode\n", 48); 
+	write(1, "In client mode your terminal is set to raw mode\n", 48);
 	write(1, "thus every byte you type is immediately sent.\n", 46);
 	write(1, "There is no line editing, not even Backspace.\n", 46);
 	write(1, "\n", 1);
