@@ -22,7 +22,6 @@ enum userop {
 	userop_CATLIST,
 	userop_NOF
 };
-static int usernames(int fd, const char *line, enum userop op);
 
 static int run_client(void);
 static void char_term(int on);
@@ -105,7 +104,6 @@ static int run_server(void)
 	/* Main loop */
 	while (1) {
 		static int users = 0;
-		static time_t t_last_post;
 		/* Wait for incoming data on listener or connections */
 		read_fds = all_fds;
 		if (select(fd_max + 1, &read_fds, NULL, NULL, NULL) < 0) {
@@ -126,13 +124,6 @@ static int run_server(void)
 				write(2, "new connection\n", 15);
 				FD_SET(fd, &all_fds);
 				if (fd > fd_max) fd_max = fd;
-				sprintf(line, "%d user(s) chatting: ", users);
-				usernames(fd, line, userop_CATLIST);
-				strcat(line, "\n");
-				write(fd, line, strlen(line));
-				sprintf(line, "Time since last post [s]: %ld\n",
-				              time(NULL) - t_last_post);
-				write(fd, line, strlen(line));
 			}
 		}
 		/* Existing connections: read, forward to others */
@@ -148,15 +139,10 @@ static int run_server(void)
 				write(2, "connection closed\n", 18);
 				close(i);
 				FD_CLR(i, &all_fds);
-				if (usernames(i, line, userop_CAT))
-					strcat(line, "  --- GOOD BYE ---  \n");
 				length = strlen(line);
-				usernames(i, NULL, userop_CLR);
 			}
 			else {
-				t_last_post = time(NULL);
 				line[length] = 0;
-				usernames(i, line + 5, userop_SET);
 			}
 			sprintf(line + length, "\033[0m");
 			length += 4;
@@ -171,44 +157,6 @@ static int run_server(void)
 	}
 }
 
-/* Serverside username database, indexed by socket file-descriptors.
- * Possible operations: set, clear, get, cat list to string.
- */
-static int usernames(int fd, const char *line, enum userop op)
-{
-	int i;
-	static char *names[64] = { [0] = NULL, }; /* C99, wipes whole array */
-	if (fd < 0 || fd >= 64) return 0;
-	switch (op) {
-	case userop_CLR:
-		free(names[fd]);
-		names[fd] = NULL;
-		return fd;
-	case userop_SET:
-		if (names[fd] || line[0] != '<') return 0;
-		char *end_name = strchr(line, '>');
-		if (!end_name) return 0;
-		int size = end_name - line + 1;
-		names[fd] = malloc(size + 1);
-		if (!names[fd]) return 0;
-		memcpy(names[fd], line, size);
-		names[fd][size] = 0;
-		return fd;
-	case userop_CAT:
-		if (!names[fd]) return 0;
-		strcat(line, names[fd]);
-		return fd;
-	case userop_CATLIST:
-		for (i = 0; i < 64; ++i) {
-			if (names[i])
-				strcat(line, names[i]);
-		}
-		return 0;
-	default:
-		return 0;
-	}
-}
-
 /* Client: get username from environment or interactively.
  * Disable terminal line-buffering for immediate sending of typed characters.
  * Wait for incoming text on both stdin and socket with select().
@@ -217,18 +165,23 @@ static int usernames(int fd, const char *line, enum userop op)
  */
 static int run_client(void)
 {
-	/* Get user name */
+	/* Get user name, but only if stdin is a terminal */
 	char username[20] = "<";
-	char *user = getenv("USER");
-	if (user) {
-		strcat(username, user);
+	if (!isatty(0)) {
+		username[0] = 0;
 	}
 	else {
-		write(1, "enter user name: ", 17);
-		int len = read(0, username + 1, 17);
-		username[len] = 0;
+		char *user = getenv("USER");
+		if (user) {
+			strcat(username, user);
+		}
+		else {
+			write(1, "enter user name: ", 17);
+			int len = read(0, username + 1, 17);
+			username[len] = 0;
+		}
+		strcat(username, ">  ");
 	}
-	strcat(username, ">  ");
 	/* Prepare multiplexed reading from socket and stdin */
 	char line[256];
 	int fd_max = s;
@@ -253,7 +206,7 @@ static int run_client(void)
 				char_term(0);
 				return 5;
 			}
-			write(2, line, length);
+			write(1, line, length);
 		}
 		/* New data from user terminal */
 		if (FD_ISSET(0, &read_fds)) {
@@ -266,7 +219,7 @@ static int run_client(void)
 			}
 			int length = read(0, line + ofs_name, 256);
 			if (length <= 0 || line[ofs_name] == 4) {
-				write(1, "\ngood bye\n", 10);
+				write(2, "\ngood bye\n", 10);
 				close(s);
 				char_term(0);
 				return 0;
