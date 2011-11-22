@@ -71,6 +71,7 @@ int main(int argc, char *argv[])
 	}
 	freeaddrinfo(srv);
 	signal(SIGTERM, sig_term);
+	signal(SIGINT, sig_term);
 	/* Got the open socket, do my thing */
 	return server ? run_server()
 	              : run_client();
@@ -252,7 +253,7 @@ static void char_term(int on)
 static void sig_term(int signal)
 {
 	close(s);
-	write(2, "received SIGTERM\n", 17);
+	write(2, "received SIGTERM or SIGINT\n", 27);
 }
 
 /* Print help text */
