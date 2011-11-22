@@ -15,13 +15,6 @@
 int s;
 
 static int run_server(void);
-enum userop {
-	userop_CLR,
-	userop_SET,
-	userop_CAT,
-	userop_CATLIST,
-	userop_NOF
-};
 
 static int run_client(void);
 static void char_term(int on);
