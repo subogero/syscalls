@@ -6,6 +6,7 @@
 #include <sys/socket.h>
 #include <netdb.h>
 #include <time.h>
+#include <signal.h>
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -26,6 +27,7 @@ static int usernames(int fd, const char *line, enum userop op);
 static int run_client(void);
 static void char_term(int on);
 
+static void sig_term(int signal);
 static void help(void);
 
 /* Parse command line for server-mode or hostname and port.
@@ -76,6 +78,7 @@ int main(int argc, char *argv[])
 		return 4;
 	}
 	freeaddrinfo(srv);
+	signal(SIGTERM, sig_term);
 	/* Got the open socket, do my thing */
 	return server ? run_server()
 	              : run_client();
@@ -298,6 +301,12 @@ static void char_term(int on)
 		tcsetattr(0, TCSANOW, &orig);
 		state = 0;
 	}
+}
+
+static void sig_term(int signal)
+{
+	close(s);
+	write(2, "received SIGTERM\n", 17);
 }
 
 /* Print help text */
