@@ -160,7 +160,7 @@ static int run_server(void)
 static int run_client(void)
 {
 	/* Get user name, but only if stdin is a terminal */
-	char username[20] = "<";
+	char username[20] = "\a<";
 	if (!isatty(0)) {
 		username[0] = 0;
 	}
