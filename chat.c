@@ -88,8 +88,9 @@ static int run_server(void)
 {
 	/* Start listening for new conections */
 	char line[256];
+	char line_in[256];
 	int fd_max = s;
-	fd_set all_fds, read_fds;
+	fd_set all_fds, read_fds, new_fds, color_fds;
 	FD_SET(s, &all_fds);
 	if (listen(s, 5) < 0) {
 		write(2, "listen error\n", 13);
@@ -117,6 +118,7 @@ static int run_server(void)
 				users++;
 				write(2, "new connection\n", 15);
 				FD_SET(fd, &all_fds);
+				FD_SET(fd, &new_fds);
 				if (fd > fd_max) fd_max = fd;
 			}
 		}
@@ -125,21 +127,31 @@ static int run_server(void)
 		for (i = 3; i <= fd_max; ++i) {
 			if (i == s || !FD_ISSET(i, &read_fds))
 				continue;
-			sprintf(line, "\033[%dm", 31 + i%6);
-			int length = 5 + read(i, line + 5, 256);
+			int length = read(i, line_in, 247);
+			/* Colors if magic "\a<" in 1st message */
+			if (FD_ISSET(i, &new_fds)) {
+				FD_CLR(i, &new_fds);
+				if (strncmp(line_in, "\a<", 2) == 0)
+					FD_SET(i, &color_fds);
+			}
 			/* Close connection if necessary */
-			if (length <= 5) {
+			if (length <= 0) {
 				users--;
 				write(2, "connection closed\n", 18);
 				close(i);
 				FD_CLR(i, &all_fds);
-				length = strlen(line);
+				FD_CLR(i, &color_fds);
+			}
+			/* Colorize line if necessary */
+			if (FD_ISSET(i, &color_fds)) {
+				sprintf(line, "\033[%dm", 31 + i%6);
+				memcpy(line + 5, line_in, length);
+				memcpy(line + 5 + length, "\033[0m", 4);
+				length += 9;
 			}
 			else {
-				line[length] = 0;
+				memcpy(line, line_in, length);
 			}
-			sprintf(line + length, "\033[0m");
-			length += 4;
 			/* Copy line to all connections except sender */
 			int j;
 			for (j = 3; j <= fd_max; ++j) {
@@ -202,25 +214,30 @@ static int run_client(void)
 			}
 			write(1, line, length);
 		}
-		/* New data from user terminal */
+		/* New data from user terminal
+		 * Username prefix and Ctrl-D processing 
+		 * only if reading from terminal
+		 */
 		if (FD_ISSET(0, &read_fds)) {
 			static char line_closed = 1;
 			int ofs_name = 0;
-			if (line_closed) {
+			if (*username && line_closed) {
 				strcpy(line, username);
 				ofs_name = strlen(username);
 				line_closed = 0;
 			}
-			int length = read(0, line + ofs_name, 256);
-			if (length <= 0 || line[ofs_name] == 4) {
+			int length = read(0, line + ofs_name, 236);
+			if (length <= 0 || *username && line[ofs_name] == 4) {
 				write(2, "\ngood bye\n", 10);
 				close(s);
 				char_term(0);
 				return 0;
 			}
-			line[length + ofs_name] = 0;
-			if (strchr(line, '\n'))
-				line_closed = 1;
+			if (*username) {
+				line[length + ofs_name] = 0;
+				if (strchr(line, '\n'))
+					line_closed = 1;
+			}
 			write(s, line, length + ofs_name);
 		}
 	}
