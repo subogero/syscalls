@@ -183,8 +183,8 @@ static int run_client(void)
 		}
 		else {
 			write(1, "enter user name: ", 17);
-			int len = read(0, username + 1, 17);
-			username[len] = 0;
+			int len = read(0, username + 2, 16);
+			username[len + 1] = 0;
 		}
 		strcat(username, ">  ");
 	}
