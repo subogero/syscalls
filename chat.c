@@ -5,7 +5,6 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netdb.h>
-#include <time.h>
 #include <signal.h>
 #include <string.h>
 #include <stdio.h>
@@ -78,11 +77,9 @@ int main(int argc, char *argv[])
 }
 
 /* Server: listen on socket "s" for new connections.
- * Welcome new user with number and list of users and time since last post.
  * Maintain existing connections in fd_set "all_fds".
  * Wait for incoming text on all connections with select().
  * Copy incoming data with user-specific colouring to all other connections.
- * Print goodbye message to others if a connection is closed.
  */
 static int run_server(void)
 {
@@ -166,8 +163,8 @@ static int run_server(void)
 /* Client: get username from environment or interactively.
  * Disable terminal line-buffering for immediate sending of typed characters.
  * Wait for incoming text on both stdin and socket with select().
- * Print socket data to terminal (stdout).
- * Copy data from stdin to socket, prefixing each line with user-name.
+ * Print socket data to stdout.
+ * Copy data from stdin to socket, add user-name prefix if terminal.
  */
 static int run_client(void)
 {
@@ -267,6 +264,9 @@ static void char_term(int on)
 	}
 }
 
+/* Signal handler for SIGINT and SIGTERM
+ * Close main socket, select() will exit gracefully
+ */
 static void sig_term(int signal)
 {
 	close(s);
