@@ -84,8 +84,8 @@ int main(int argc, char *argv[])
 static int run_server(void)
 {
 	/* Start listening for new conections */
-	char line[256];
-	char line_in[256];
+	char line[65536];
+	char line_in[65536];
 	int fd_max = s;
 	fd_set all_fds, read_fds, new_fds, color_fds;
 	FD_SET(s, &all_fds);
@@ -124,7 +124,7 @@ static int run_server(void)
 		for (i = 3; i <= fd_max; ++i) {
 			if (i == s || !FD_ISSET(i, &read_fds))
 				continue;
-			int length = read(i, line_in, 247);
+			int length = read(i, line_in, 65527);
 			/* Colors if magic "\a<" in 1st message */
 			if (FD_ISSET(i, &new_fds)) {
 				FD_CLR(i, &new_fds);
@@ -146,15 +146,14 @@ static int run_server(void)
 				memcpy(line + 5 + length, "\033[0m", 4);
 				length += 9;
 			}
-			else {
-				memcpy(line, line_in, length);
-			}
 			/* Copy line to all connections except sender */
 			int j;
 			for (j = 3; j <= fd_max; ++j) {
 				if (j == s || j == i || !FD_ISSET(j, &all_fds))
 					continue;
-				write(j, line, length);
+				write(j,
+				      FD_ISSET(i, &color_fds) ? line : line_in,
+				      length);
 			}
 		}
 	}
@@ -186,7 +185,7 @@ static int run_client(void)
 		strcat(username, ">  ");
 	}
 	/* Prepare multiplexed reading from socket and stdin */
-	char line[256];
+	char line[65536];
 	int fd_max = s;
 	fd_set all_fds, read_fds;
 	FD_SET(s, &all_fds);
@@ -201,7 +200,7 @@ static int run_client(void)
 		}
 		/* New data from server */
 		if (FD_ISSET(s, &read_fds)) {
-			int length = read(s, line, 256);
+			int length = read(s, line, 65536);
 			/* Close connection if necessary */
 			if (length <= 0) {
 				write(2, "connection closed\n", 18);
@@ -223,7 +222,7 @@ static int run_client(void)
 				ofs_name = strlen(username);
 				line_closed = 0;
 			}
-			int length = read(0, line + ofs_name, 236);
+			int length = read(0, line + ofs_name, 65516);
 			if (length <= 0 || *username && line[ofs_name] == 4) {
 				write(2, "\ngood bye\n", 10);
 				close(s);
