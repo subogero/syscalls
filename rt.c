@@ -11,13 +11,15 @@
 #include <stdio.h>
 
 int times[1000];
-volatile int ticks = 0;
 struct timeval t_start;
+int fds[2];
 
 static void periodic(int signal);
 
 int main(int argc, char *argv[])
 {
+	/* Open a pipe for signalhandler to notify main when finished */
+	pipe(fds);
 	/* Get interval [us] from 1st argument */
 	if (argc < 2) {
 		write(2, "Please specify time period in [us]!\n", 29);
@@ -36,24 +38,30 @@ int main(int argc, char *argv[])
 	gettimeofday(&t_start, NULL);
 	signal(SIGALRM, periodic);
 	setitimer(ITIMER_REAL, &period, NULL);
-	/* Wait for 1000 signals, then evaluate */
-	while (ticks < 1000);
+	/* Wait for command from signal handler, then evaluate */
+	char cmd;
+	read(fds[0], &cmd, 1);
+	close(fds[0]);
+	/* Prepare evaluation */
 	int i;
 	double mean = 0.0;
 	int min = 0x7FFFFFFF;
 	int max = 0;
+	/* Average */
 	for (i = 1; i < 1000; ++i) {
 		int dt = times[i] - times[i-1];
 		if (dt < min) min = dt;
 		if (dt > max) max = dt;
 		mean += (double)dt / 999.0;
 	}
+	/* Standard deviation */
 	double sd = 0.0;
 	for (i = 1; i < 1000; ++i) {
 		double vari = (double)(times[i] - times[i-1]) - period_us;
 		sd += vari * vari / 999.0;
 	}
 	sd = sqrt(sd);
+	/* Print evaluation */
 	printf("Calling period time\n");
 	printf("Mean [us] = %10.3f\n", mean);
 	printf("SD   [us] = %10.3f %7.3f %%\n" , sd , sd  * 100.0 / period_us);
@@ -66,7 +74,14 @@ int main(int argc, char *argv[])
 static void periodic(int sig)
 {
 	struct timeval t;
+	static int ticks = 0;
 	gettimeofday(&t, NULL);
 	times[ticks++] = 1000000 * (t.tv_sec - t_start.tv_sec) + t.tv_usec;
-	if (ticks < 1000) signal(SIGALRM, periodic);
+	if (ticks < 1000) {
+		signal(SIGALRM, periodic);
+	}
+	else {
+		write(fds[1], "q", 1);
+		close(fds[1]);
+	}
 }
