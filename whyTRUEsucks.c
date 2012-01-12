@@ -10,6 +10,7 @@
  * - in the parentheses after if () and while ()
  * - the 2nd expression in for (x; y; z)
  * - the operands of || and && operators
+ * - 1st operand of ?: operators
  *
  * With using TRUE and FALSE you simply create an illusion and write
  * dangerous code.
@@ -21,6 +22,7 @@
 #define TRUE (!FALSE)
 int main(void)
 {
+	/* Initialize signed/unsigned ints/bitfields to TRUE */
 	struct foo_t {
 		int          bar: 1;
 		unsigned int baz: 1;
@@ -32,18 +34,35 @@ int main(void)
 		TRUE,
 		TRUE,
 	};
+	/*
+	 * Check signed/unsigned bitfields against TRUE, print results
+	 * A signed int 1-bitfield fails, as it's aither 0 or -1, never 1 (TRUE).
+	 */
 	printf("\nAssign TRUE (!FALSE) to bar, baz, spam and eggs.\n");
-	printf("\nAssign TRUE to a signed bitfield, then compare to TRUE. Fail.\n");
-	printf("bar   %2d, baz   %2d\n", foo.bar == TRUE, foo.baz == TRUE);
-	printf("\nCheck any variable against our definition of TRUE (~FALSE),\n");
-	printf("after it was assigned TRUE (!FALSE) somewhere else. Epic Fail!\n");
+	printf("\nCompare all to TRUE. Signed bitfield Fails.\n");
+	printf("bar  (signed bitf) is %s.\n", foo.bar  == TRUE ? "true" : "false");
+	printf("baz  (unsig. bitf) is %s.\n", foo.baz  == TRUE ? "true" : "false");
+	printf("spam (signed int)  is %s.\n", foo.spam == TRUE ? "true" : "false");
+	printf("eggs (unsig. int)  is %s.\n", foo.eggs == TRUE ? "true" : "false");
+	/*
+	 * Redefine TRUE to ~FALSE, simulating inconsistent TRUEs in multiple files
+	 * Check signed/unsigned integers against our TRUE, print results.
+	 * Even integers fail, as 1 is never equal to ~0 (0xFFFFFFFF)
+	 */
+	printf("\nChange TRUE to ~FALSE. Epic Fail, except signed bitfield.\n");
 	#undef TRUE
 	#define TRUE (~FALSE)
-	printf("spam  %2d, eggs  %2d\n", foo.spam == TRUE, foo.eggs == TRUE);
+	printf("bar  (signed bitf) is %s.\n", foo.bar  == TRUE ? "true" : "false");
+	printf("baz  (unsig. bitf) is %s.\n", foo.baz  == TRUE ? "true" : "false");
+	printf("spam (signed int)  is %s.\n", foo.spam == TRUE ? "true" : "false");
+	printf("eggs (unsig. int)  is %s.\n", foo.eggs == TRUE ? "true" : "false");
+	/*
+	 * Check all signed/unsigned ints/bitfields in the K&R way
+	 */
 	printf("\nThe right way is the K&R way: if (baz) and if (!baz) always works.\n");
-	if (foo.bar) printf("bar is true.\n");
-	if (foo.baz) printf("baz is true.\n");
-	if (foo.spam) printf("spam is true.\n");
-	if (foo.eggs) printf("eggs is true.\n");
+	printf("bar  (signed bitf) is %s.\n", foo.bar  ? "true" : "false");
+	printf("baz  (unsig. bitf) is %s.\n", foo.baz  ? "true" : "false");
+	printf("spam (signed int)  is %s.\n", foo.spam ? "true" : "false");
+	printf("eggs (unsig. int)  is %s.\n", foo.eggs ? "true" : "false");
 	return 0;
 }
