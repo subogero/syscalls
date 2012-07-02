@@ -50,7 +50,7 @@ void command(void)
 		          ? argv[i][3] - '0'
 		          : what == 0
 		          ? open(argv[i] + 2, O_RDONLY)
-		          : open(argv[i] + 2, O_CREAT|O_WRONLY|O_TRUNC);
+		          : creat(argv[i] + 2, 0644);
 		close(what);
 		dup(where);
 		if (where > 2)
