@@ -58,10 +58,9 @@ void command(void)
 	}
 	if (redir)
 		argv[redir] = 0;
-	if (execvp(argv[0], argv)) {
-		write(2, "Ilyen nincs!\n", 13);
-		_exit(-1);
-	}
+	execvp(argv[0], argv);
+	write(2, "Ilyen nincs!\n", 13);
+	_exit(-1);
 }
 
 int main(void)
