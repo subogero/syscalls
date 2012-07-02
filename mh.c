@@ -1,6 +1,7 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <sys/fcntl.h>
 
 char line[81];
 
@@ -36,8 +37,29 @@ void command(void)
 		return;
 	}
 	/* Child: perform redirection and exec command */
-	else {
-		_exit(0);
+	int redir = 0;
+	for (i = 0; i < argc; ++i) {
+		int what = argv[i][1] != '<' && argv[i][1] != '>'
+		         ? -1
+		         : argv[i][0] - '0';
+		if (what < 0 || what > 2)
+			continue;
+		if (!redir)
+			redir = i;
+		int where = argv[i][2] == '&'
+		          ? argv[i][3] - '0'
+		          : what == 0
+		          ? open(argv[i] + 2, O_RDONLY)
+		          : open(argv[i] + 2, O_CREAT|O_WRONLY|O_TRUNC);
+		close(what);
+		dup(where);
+		close(where);
+	}
+	if (redir)
+		argv[redir] = 0;
+	if (execvp(argv[0], argv)) {
+		write(2, "Ilyen nincs!\n", 13);
+		_exit(-1);
 	}
 }
 
