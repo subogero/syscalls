@@ -1,8 +1,3 @@
-#define DEBUG
-#ifdef DEBUG
-#include <stdio.h>
-#endif
-
 #include <unistd.h>
 
 char line[81];
@@ -27,12 +22,6 @@ void command(void)
 		}
 		i++;
 	}
-#ifdef DEBUG
-	printf("argc = %d\n", argc);
-	for (i = 0; i < argc; ++i) {
-		printf("argv %d = %s\n", i, argv[i]);
-	}
-#endif
 }
 
 int main(void)
