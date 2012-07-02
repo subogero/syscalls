@@ -3,8 +3,11 @@
 #include <stdio.h>
 #endif
 
-char line[81] = "cat foo rt.c >log 2>&1\n";
-int main(void)
+#include <unistd.h>
+
+char line[81];
+
+void command(void)
 {
 	int argc = 0;
 	int i = 0;
@@ -30,5 +33,11 @@ int main(void)
 		printf("argv %d = %s\n", i, argv[i]);
 	}
 #endif
+}
+
+int main(void)
+{
+	while (read(0, line, 80))
+		command();
 	return 0;
 }
