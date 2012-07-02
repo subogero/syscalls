@@ -53,7 +53,8 @@ void command(void)
 		          : open(argv[i] + 2, O_CREAT|O_WRONLY|O_TRUNC);
 		close(what);
 		dup(where);
-		close(where);
+		if (where > 2)
+			close(where);
 	}
 	if (redir)
 		argv[redir] = 0;
