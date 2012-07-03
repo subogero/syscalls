@@ -42,3 +42,6 @@ A chat client-server using TCP/IP sockets and select().
 
 11. rt.c
 Periodic calls using signal(), setitimer() and gettimeofday().
+
+12. mh.c
+The mh branch shows the steps of building a Hungarian shell, the MAGYAR HEJ.
