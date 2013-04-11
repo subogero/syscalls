@@ -12,13 +12,12 @@
 #include <math.h>
 #include <stdio.h>
 
-int times[1000];
 struct timeval t_start;
 int fds[2];
 int period_us;
 
-static void periodic(int signal);
-static void evaluate(void);
+static void periodic(int sig);
+static void evaluate(int sig);
 
 int main(int argc, char *argv[])
 {
@@ -28,81 +27,91 @@ int main(int argc, char *argv[])
 		return 1;
 	}
 	period_us = atoi(argv[1]);
-	struct itimerval period = {
-		{	period_us / 1000000,
-			period_us % 1000000,
-		},
-		{	period_us / 1000000,
-			period_us % 1000000,
-		},
-	};
 	/* Open a pipe for signalhandler to send commands to main() */
 	pipe(fds);
-	/* Set up periodic SIGALRM and its handler */
-	gettimeofday(&t_start, NULL);
-	signal(SIGALRM, periodic);
-	setitimer(ITIMER_REAL, &period, NULL);
-	/* Main loop waiting for commands from periodic signal handler */
-	while (1) {
-		char cmd;
-		read(fds[0], &cmd, 1);
-		if (cmd == 'w')
-			evaluate();
-		if (cmd == 'q') {
-			close(fds[0]);
-			return 0;
-		}
+	int child_pid = fork();
+	/* CHILD: Set up specified periodic SIGALRM for real-time task */
+	if (!child_pid) {
+		struct itimerval period = {
+			{ period_us / 1000000, period_us % 1000000, },
+			{ period_us / 1000000, period_us % 1000000, },
+		};
+		close(fds[0]);
+		gettimeofday(&t_start, NULL);
+		signal(SIGALRM, periodic);
+		setitimer(ITIMER_REAL, &period, NULL);
 	}
+	/* PARENT: Set up 1000 times slower periodic SIGALRM for eval */
+	else {
+		struct itimerval period = {
+			{ period_us / 1000, period_us % 1000, },
+			{ period_us / 1000, period_us % 1000, },
+		};
+		close(fds[1]);
+		signal(SIGALRM, evaluate);
+		setitimer(ITIMER_REAL, &period, NULL);
+	}
+	while (1) {
+		pause();
+	}
+	return 0;
 }
 
-/* SIGALRM handler stores times, re-installs for 1min, eval each 1000 cycles */
+/* SIGALRM handler stores times, re-installs for 60000 times, then quits */
 static void periodic(int sig)
 {
 	struct timeval t;
 	static int ticks = 0;
 	gettimeofday(&t, NULL);
-	int dt = 1000000 * (t.tv_sec - t_start.tv_sec) + t.tv_usec;
-	times[ticks++] = dt;
-	if (ticks < 1000) {
+	int dt = (t.tv_sec - t_start.tv_sec) * 1000000
+	       + t.tv_usec - t_start.tv_usec;
+	t_start = t;
+	write(fds[1], &dt, 4);
+	ticks++;
+	if (ticks < 6000) {
 		signal(SIGALRM, periodic);
-	}
-	else {
-		ticks = 0;
-		write(fds[1], "w", 1);
-		if (dt >= 60000000) {
-			write(fds[1], "q", 1);
-			close(fds[1]);
-		}
-		else {
-			signal(SIGALRM, periodic);
-		}
+	} else {
+		close(fds[1]);
+		exit(0);
 	}
 }
 
 /* Evaluate timing accuracy */
-static void evaluate(void)
+static void evaluate(int sig)
 {
-	static char heading = 0;
 	int i;
 	double mean = 0.0;
 	double sd = 0.0;
 	int min = 0x7FFFFFFF;
 	int max = 0;
+	int times[5000];
+	int input = read(fds[0], times, 5000);
+	int samples = input / 4;
+	if (input % 4) {
+		printf("Partial timestamp received: %d bytes\n", input % 4);
+		exit(1);
+	}
+	if (input == 0) {
+		exit(0);
+	}
+	signal(SIGALRM, evaluate);
 	/* Average and Standard deviation */
-	for (i = 1; i < 1000; ++i) {
-		int dt = times[i] - times[i-1];
+	for (i = 1; i < samples; ++i) {
+		int dt = times[i];
 		if (dt < min) min = dt;
 		if (dt > max) max = dt;
-		mean += (double)dt / 999.0;
-		double vari = (double)(times[i] - times[i-1]) - period_us;
-		sd += vari * vari / 999.0;
+		mean += (double)dt / samples;
+		double vari = (double)dt - period_us;
+		sd += vari * vari / samples;
 	}
 	sd = sqrt(sd);
 	/* Print evaluation */
+	static char heading = 0;
 	if (!heading) {
-		printf("Mean  [us]   SD  [us]     [%%]  Min [us]     [%%]  Max [us]     [%%]\n");
+		printf("n     Mean [us]    SD [us]     [%%]  Min [us]     [%%]  Max [us]     [%%]\n");
 		heading = 1;
 	}
+	printf("%4d ", samples);
 	printf("%10.3f ", mean);
 	printf("%10.3f %7.3f ", sd, sd  * 100.0 / period_us);
 	printf("%9d %7.3f ", min, (period_us - min) * 100.0 / period_us);
