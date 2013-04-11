@@ -8,6 +8,7 @@
 #include <sys/time.h>
 #include <unistd.h>
 #include <signal.h>
+#include <sched.h>
 #include <stdlib.h>
 #include <math.h>
 #include <stdio.h>
@@ -32,6 +33,15 @@ int main(int argc, char *argv[])
 	int child_pid = fork();
 	/* CHILD: Set up specified periodic SIGALRM for real-time task */
 	if (!child_pid) {
+		/* Set scheduling prio if specified */
+		if (argc >= 3) {
+			int prio = atoi(argv[2]);
+			if (prio > 0) {
+				struct sched_param schedp;
+				schedp.sched_priority = prio;
+				sched_setscheduler(0, SCHED_FIFO, &schedp);
+			}
+		}
 		struct itimerval period = {
 			{ period_us / 1000000, period_us % 1000000, },
 			{ period_us / 1000000, period_us % 1000000, },
@@ -61,14 +71,14 @@ int main(int argc, char *argv[])
 static void periodic(int sig)
 {
 	struct timeval t;
-	static int ticks = 0;
+	static int time_us = 0;
 	gettimeofday(&t, NULL);
 	int dt = (t.tv_sec - t_start.tv_sec) * 1000000
 	       + t.tv_usec - t_start.tv_usec;
 	t_start = t;
 	write(fds[1], &dt, 4);
-	ticks++;
-	if (ticks < 6000) {
+	time_us += dt;
+	if (time_us < 30000000) {
 		signal(SIGALRM, periodic);
 	} else {
 		close(fds[1]);
@@ -96,7 +106,7 @@ static void evaluate(int sig)
 	}
 	signal(SIGALRM, evaluate);
 	/* Average and Standard deviation */
-	for (i = 1; i < samples; ++i) {
+	for (i = 0; i < samples; ++i) {
 		int dt = times[i];
 		if (dt < min) min = dt;
 		if (dt > max) max = dt;
