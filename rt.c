@@ -20,6 +20,18 @@ int period_us;
 static void periodic(int sig);
 static void evaluate(int sig);
 
+struct dataset {
+	int samples;
+	int min;
+	int max;
+	double mean;
+	double variance;
+	double sd;
+};
+static void dataset_fill(struct dataset *this, int samples, int value);
+static void dataset_merge(struct dataset *this, const struct dataset *src);
+static void dataset_print(struct dataset *this, int heading);
+
 int main(int argc, char *argv[])
 {
 	/* Get interval [us] from 1st argument */
@@ -91,10 +103,8 @@ static void periodic(int sig)
 static void evaluate(int sig)
 {
 	int i;
-	double mean = 0.0;
-	double sd = 0.0;
-	int min = 0x7FFFFFFF;
-	int max = 0;
+	struct dataset last = { 0, };
+	static struct dataset all = { 0, };
 	int times[5000];
 	int input = read(fds[0], times, 5000);
 	int samples = input / 4;
@@ -102,29 +112,81 @@ static void evaluate(int sig)
 		printf("Partial timestamp received: %d bytes\n", input % 4);
 		exit(1);
 	}
-	if (input == 0) {
-		exit(0);
-	}
 	signal(SIGALRM, evaluate);
 	/* Average and Standard deviation */
 	for (i = 0; i < samples; ++i) {
-		int dt = times[i];
-		if (dt < min) min = dt;
-		if (dt > max) max = dt;
-		mean += (double)dt / samples;
-		double vari = (double)dt - period_us;
-		sd += vari * vari / samples;
+		dataset_fill(&last, samples, times[i]);
 	}
-	sd = sqrt(sd);
+	dataset_merge(&all, &last);
 	/* Print evaluation */
-	static char heading = 0;
-	if (!heading) {
-		printf("n     Mean [us]    SD [us]     [%%]  Min [us]     [%%]  Max [us]     [%%]\n");
-		heading = 1;
+	static char heading = 1;
+	dataset_print(&last, heading);
+	heading = 0;
+	if (input < 3000) {
+		dataset_print(&all, 1);
+		exit(0);
 	}
-	printf("%4d ", samples);
-	printf("%10.3f ", mean);
-	printf("%10.3f %7.3f ", sd, sd  * 100.0 / period_us);
-	printf("%9d %7.3f ", min, (period_us - min) * 100.0 / period_us);
-	printf("%9d %7.3f\n", max, (max - period_us) * 100.0 / period_us);
+}
+
+static void dataset_fill(struct dataset *this, int samples, int value)
+{
+	/* Init min/max, assumes all fields zero */
+	if (this->samples == 0) {
+		this->min = 0x7FFFFFFF;
+		this->max = 0x80000000;
+	}
+	/* Process a sample */
+	if (value < this->min) this->min = value;
+	if (value > this->max) this->max = value;
+	this->mean += (double)value / samples;
+	double vari = (double)value - period_us;
+	this->variance += vari * vari / samples;
+	this->sd = sqrt(this->variance);
+	this->samples = samples;
+}
+
+static void dataset_merge(struct dataset *this, const struct dataset *src)
+{
+	/* this our source empty: use other one */
+	if (src->samples == 0) {
+		return;
+	}
+	if (this->samples == 0) {
+		*this = *src;
+		return;
+	}
+	int sum_samples = this->samples + src->samples;
+	this->mean = (this->samples * this->mean +
+	              src->samples * src->mean)
+	           / sum_samples;
+	this->variance = (this->samples * this->variance +
+	                 src->samples * src->variance)
+	               / sum_samples;
+	this->sd = sqrt(this->variance);
+	if (src->max > this->max) {
+		this->max = src->max;
+	}
+	if (src->min < this->min) {
+		this->min = src->min;
+	}
+	this->samples = sum_samples;
+}
+
+static void dataset_print(struct dataset *this, int heading)
+{
+	/* Skip printing if dataset empty */
+	if (this->samples == 0) {
+		return;
+	}
+	if (heading) {
+		printf("------------------------------------------------------------------------\n");
+		printf("     n  Mean [us]       [us] SD  [%%]      [us] Min [%%]      [us] Max [%%]\n");
+		printf("------------------------------------------------------------------------\n");
+	}
+	printf("%6d ", this->samples);
+	printf("%10.3f ", this->mean);
+	printf("%10.3f %7.3f ", this->sd, this->sd  * 100.0 / period_us);
+	printf("%9d %7.3f ", this->min, (period_us - this->min) * 100.0 / period_us);
+	printf("%9d %7.3f ", this->max, (this->max - period_us) * 100.0 / period_us);
+	printf("\n");
 }
