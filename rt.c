@@ -32,6 +32,7 @@ int main(int argc, char *argv[])
 	pipe(fds);
 	int child_pid = fork();
 	/* CHILD: Set up specified periodic SIGALRM for real-time task */
+	/* PARENT: Set up 1000 times slower periodic SIGALRM for eval */
 	if (!child_pid) {
 		/* Set scheduling prio if specified */
 		if (argc >= 3) {
@@ -50,17 +51,17 @@ int main(int argc, char *argv[])
 		gettimeofday(&t_start, NULL);
 		signal(SIGALRM, periodic);
 		setitimer(ITIMER_REAL, &period, NULL);
-	}
-	/* PARENT: Set up 1000 times slower periodic SIGALRM for eval */
-	else {
+	} else {
+		int eval_period = period_us * 1000;
 		struct itimerval period = {
-			{ period_us / 1000, period_us % 1000, },
-			{ period_us / 1000, period_us % 1000, },
+			{ eval_period / 1000000, eval_period % 1000000, },
+			{ eval_period / 1000000, eval_period % 1000000, },
 		};
 		close(fds[1]);
 		signal(SIGALRM, evaluate);
 		setitimer(ITIMER_REAL, &period, NULL);
 	}
+	/* Main idle loop in both: everything done by signal handlers */
 	while (1) {
 		pause();
 	}
