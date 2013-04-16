@@ -64,6 +64,7 @@ int main(int argc, char *argv[])
 		signal(SIGALRM, periodic);
 		setitimer(ITIMER_REAL, &period, NULL);
 	} else {
+		printf("Real time child process PID %d\n", child_pid);
 		int eval_period = period_us * 1000;
 		struct itimerval period = {
 			{ eval_period / 1000000, eval_period % 1000000, },
